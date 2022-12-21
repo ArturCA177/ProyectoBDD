@@ -48,6 +48,26 @@ on soh.SalesOrderID = t.SalesOrderID
 group by soh.TerritoryID
 order by soh.TerritoryID
 
+/*b. Determinar el producto más solicitado para la región (atributo group de 
+salesterritory) que se especifique como argumento de entrada y en que 
+territorio de la región tiene mayor demanda.*/
+
+	create or alter procedure CB as
+		select top 1 D.[Name] as Producto, count(*) as Solicitudes, B.[Group] as Region from
+		(select * from salesAW.AdventureWorks2019.Sales.SalesOrderHeader) as A
+		inner join
+		(select *  from salesAW.AdventureWorks2019.Sales.SalesTerritory where TerritoryID between '1' and '6') as B
+		on A.TerritoryID = B.TerritoryID
+		inner join
+		(select * from salesAW.AdventureWorks2019.Sales.SalesOrderDetail) as C
+		on A.SalesOrderID = C.SalesOrderID
+		inner join
+		(select * from productionAW.AdventureWorks2019.Production.Product) as D
+		on C.ProductID = D.ProductID
+	group by B.[Group], D.[Name]
+	order by Solicitudes desc
+
+exec CB
 
 
 
@@ -114,6 +134,50 @@ begin
 end
         
         
+/*e. Actualizar la cantidad de productos de una orden que se provea como 
+argumento en la instrucción de actualización.*/
+
+create or alter procedure CE @idProducto int, @idOrden int , @cantidad int as
+begin 
+	if not exists (select * from salesAW.AdventureWorks2019.Sales.SalesOrderDetail where ProductId = @idProducto)
+		print 'Error: Este producto no existe'
+	else 
+		begin
+			if not exists (select * from salesAW.AdventureWorks2019.Sales.SalesOrderDetail where SalesOrderID = @idOrden and ProductID = @idProducto)
+				print 'Error: Verifica el numero de orden'
+			else
+				begin
+					update salesAW.AdventureWorks2019.Sales.SalesOrderDetail
+					set OrderQty = @cantidad
+					where SalesOrderID = @idOrden and ProductID = @idProducto
+					select * from salesAw.AdventureWorks2019.Sales.SalesOrderDetail where SalesOrderID = @idOrden and ProductID = @idProducto
+				end
+		end
+end
+
+exec CE 776, 43659, 3
+
+
+
+/*f. Actualizar el método de envío de una orden que se reciba como argumento en 
+la instrucción de actualización.*/
+
+create or alter procedure CF @metodoEnvio int, @idOrden int as
+begin
+	if not exists(select * from salesAW.AdventureWorks2019.Sales.SalesOrderHeader where SalesOrderID = @idOrden)
+		print 'Error: No existe dicha orden '
+	else
+	begin
+		update salesAW.AdventureWorks2019.Sales.SalesOrderHeader
+		set ShipMethodID = @metodoEnvio
+		where SalesOrderID = @idOrden
+		print 'El metodo de envio se actualizo correctamente'
+		select ShipMethodID from salesAW.AdventureWorks2019.Sales.SalesOrderHeader where SalesOrderID = @idOrden
+	end
+end
+
+exec CF 5, 43659
+
         
 --g. Actualizar el correo electrónico de una cliente que se reciba como argumento 
 --en la instrucción de actualización
@@ -219,3 +283,44 @@ BEGIN
 	AS pedidos ORDER BY TerritoryID, Total_Pedidos DESC) AS territory10  INNER JOIN Person.Person as P ON territory10.SalesPersonID = P.BusinessEntityID
 
 END
+
+
+/*i. Determinar para un rango de fechas establecidas como argumento de entrada,
+cual es el total de las ventas en cada una de las regiones.*/
+
+create or alter procedure CI @fechaEntrada Date, @fechaSalida Date as
+begin
+	if not exists(select TerritoryID from salesAW.AdventureWorks2019.Sales.SalesOrderHeader where OrderDate between @fechaEntrada and @fechaSalida)
+		print 'Error: No hay ventas en esas fechas'
+	else
+	begin
+		SELECT TerritoryID, SUM(TotalDue) AS Total_Ventas 
+		FROM salesAW.AdventureWorks2019.Sales.SalesOrderHeader 
+		WHERE OrderDate BETWEEN @fechaEntrada AND @fechaSalida GROUP BY TerritoryID ORDER BY TerritoryID
+	end
+end
+
+exec CI '2011-05-31', '2011-06-30'
+
+/*j. Determinar los 5 productos menos vendidos en un rango de fecha establecido 
+como argumento de entrada.*/
+
+
+create or alter procedure CJ @fechaEntrada Date, @fechaSalida Date as
+begin
+	if not exists(SELECT TerritoryID FROM salesAW.AdventureWorks2019.Sales.SalesOrderHeader WHERE OrderDate BETWEEN @fechaEntrada AND @fechaSalida )
+		print 'Error: No hay ventas en esas fechas'
+	else
+	begin
+		SELECT top 5 ProductID, SUM(OrderQty) AS Cantidad_Productos
+		FROM salesAW.AdventureWorks2019.Sales.SalesOrderDetail 
+		WHERE EXISTS (
+				SELECT TerritoryID, SalesOrderID
+				FROM salesAW.AdventureWorks2019.Sales.SalesOrderHeader
+				WHERE OrderDate BETWEEN @fechaEntrada AND @fechaSalida 
+		)
+		GROUP BY ProductID ORDER BY Cantidad_Productos
+	end
+end
+
+exec CJ '2011-05-31', '2011-05-31'
